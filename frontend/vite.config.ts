@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/CAV-vs-CSV/',
+  base: '/CSV-comparison/',
   build: {
     outDir: 'dist',
     assetsDir: 'assets'
