@@ -34,37 +34,47 @@ export class ClientSideCSVProcessor {
    * CSVファイルの解析
    */
   private async parseCSVFile(file: File): Promise<Record<string, string>[]> {
-    // まずUTF-8で試行
+    const encodings = ['UTF-8', 'Shift_JIS', 'EUC-JP', 'ISO-2022-JP']
+    
+    for (const encoding of encodings) {
+      try {
+        console.log(`${encoding}で解析を試行中...`)
+        
+        let result: Record<string, string>[]
+        
+        if (encoding === 'UTF-8') {
+          result = await this.tryParseWithEncoding(file, encoding)
+        } else {
+          // Shift_JIS、EUC-JP等はFileReaderで明示的に読み込み
+          const text = await this.readFileWithEncoding(file, encoding)
+          result = await this.parseCSVText(text)
+        }
+        
+        if (this.isValidJapaneseText(result)) {
+          console.log(`${encoding}での解析が成功しました`)
+          return result
+        } else {
+          console.log(`${encoding}は文字化けが検出されました`)
+        }
+      } catch (error) {
+        console.log(`${encoding}での解析に失敗:`, error)
+      }
+    }
+
+    // 全てのエンコーディングが失敗した場合、バイナリデータとして読み込んで文字コード検出を試行
     try {
-      const utf8Result = await this.tryParseWithEncoding(file, 'UTF-8')
-      // 文字化けチェック：日本語文字が含まれているか
-      if (this.isValidJapaneseText(utf8Result)) {
-        return utf8Result
+      console.log('自動文字コード検出を試行中...')
+      const arrayBuffer = await this.readFileAsArrayBuffer(file)
+      const detectedText = this.detectAndDecodeText(arrayBuffer)
+      if (detectedText) {
+        return await this.parseCSVText(detectedText)
       }
     } catch (error) {
-      console.log('UTF-8での解析に失敗、他のエンコーディングを試行')
+      console.log('自動検出も失敗:', error)
     }
 
-    // Shift_JIS/CP932で試行（ファイルを手動で読み込み）
-    try {
-      const text = await this.readFileWithEncoding(file, 'shift_jis')
-      return new Promise((resolve, reject) => {
-        Papa.parse(text, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            resolve(results.data as Record<string, string>[])
-          },
-          error: (error) => {
-            reject(new Error(`CSV解析エラー: ${error.message}`))
-          }
-        })
-      })
-    } catch (error) {
-      console.warn('Shift_JISでの解析も失敗、UTF-8結果を使用')
-    }
-
-    // フォールバック：UTF-8で解析
+    // 最終フォールバック：UTF-8
+    console.log('最終フォールバック: UTF-8で強制解析')
     return this.tryParseWithEncoding(file, 'UTF-8')
   }
 
@@ -98,19 +108,110 @@ export class ClientSideCSVProcessor {
     })
   }
 
+  /**
+   * CSVテキストを解析
+   */
+  private async parseCSVText(text: string): Promise<Record<string, string>[]> {
+    return new Promise((resolve, reject) => {
+      Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          resolve(results.data as Record<string, string>[])
+        },
+        error: (error) => {
+          reject(new Error(`CSV解析エラー: ${error.message}`))
+        }
+      })
+    })
+  }
+
+  /**
+   * ファイルをArrayBufferとして読み込み
+   */
+  private async readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as ArrayBuffer)
+      reader.onerror = () => reject(new Error('ファイル読み込みエラー'))
+      reader.readAsArrayBuffer(file)
+    })
+  }
+
+  /**
+   * バイナリデータから文字コードを検出してデコード
+   */
+  private detectAndDecodeText(buffer: ArrayBuffer): string | null {
+    const uint8Array = new Uint8Array(buffer)
+    
+    // Shift_JIS の BOM チェック
+    if (uint8Array.length >= 2) {
+      // Shift_JIS特有のバイト列パターンをチェック
+      let hasShiftJISPattern = false
+      for (let i = 0; i < Math.min(1000, uint8Array.length - 1); i++) {
+        const byte1 = uint8Array[i]
+        const byte2 = uint8Array[i + 1]
+        // Shift_JIS の2バイト文字範囲をチェック
+        if ((byte1 >= 0x81 && byte1 <= 0x9F) || (byte1 >= 0xE0 && byte1 <= 0xFC)) {
+          if ((byte2 >= 0x40 && byte2 <= 0x7E) || (byte2 >= 0x80 && byte2 <= 0xFC)) {
+            hasShiftJISPattern = true
+            break
+          }
+        }
+      }
+      
+      if (hasShiftJISPattern) {
+        try {
+          const decoder = new TextDecoder('shift_jis')
+          return decoder.decode(buffer)
+        } catch (error) {
+          console.log('Shift_JIS デコードに失敗')
+        }
+      }
+    }
+
+    // UTF-8 を試行
+    try {
+      const decoder = new TextDecoder('utf-8', { fatal: true })
+      return decoder.decode(buffer)
+    } catch (error) {
+      console.log('UTF-8 デコードに失敗')
+    }
+
+    // EUC-JP を試行
+    try {
+      const decoder = new TextDecoder('euc-jp')
+      return decoder.decode(buffer)
+    } catch (error) {
+      console.log('EUC-JP デコードに失敗')
+    }
+
+    return null
+  }
+
   private isValidJapaneseText(data: Record<string, string>[]): boolean {
     if (data.length === 0) return true
     
     // 最初の数行をチェック
-    const sampleData = data.slice(0, 3)
+    const sampleData = data.slice(0, Math.min(5, data.length))
     const text = JSON.stringify(sampleData)
     
-    // 文字化け文字をチェック（?、□、�などが多い場合は文字化け）
-    const corruptedChars = (text.match(/[?□�]/g) || []).length
-    const totalChars = text.length
+    // 日本語文字の存在をチェック
+    const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(text)
     
-    // 全体の5%以上が文字化け文字の場合は無効とみなす
-    return totalChars === 0 || (corruptedChars / totalChars) < 0.05
+    // 文字化け文字をチェック（?、□、�、無効な文字など）
+    const corruptedChars = (text.match(/[?□�\uFFFD]/g) || []).length
+    const totalJapaneseChars = (text.match(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g) || []).length
+    
+    // 文字化け判定の改善
+    if (hasJapanese) {
+      // 日本語がある場合、文字化け文字が10%以下なら有効とみなす
+      return totalJapaneseChars > 0 && (corruptedChars / Math.max(totalJapaneseChars, 1)) < 0.1
+    } else {
+      // 日本語がない場合（英数字のみなど）、文字化け文字が5%以下なら有効
+      const totalChars = text.length
+      return totalChars === 0 || (corruptedChars / totalChars) < 0.05
+    }
   }
 
   /**
