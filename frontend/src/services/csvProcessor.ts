@@ -160,28 +160,38 @@ export class ClientSideCSVProcessor {
       return this.createEmptyResult(oldData.fileName, newData.fileName)
     }
 
-    // 最初の列をIDとして使用
+    // 比較キー列を検出（顧客名、メールアドレス）
     const oldHeaders = Object.keys(oldCustomers[0] || {})
     const newHeaders = Object.keys(newCustomers[0] || {})
-    const idColumn = oldHeaders[0] || newHeaders[0]
-
-    if (!idColumn) {
+    
+    const keyColumns = this.findComparisonKeys(oldHeaders, newHeaders)
+    
+    if (keyColumns.length === 0) {
       return this.createEmptyResult(oldData.fileName, newData.fileName)
     }
 
-    // 既存顧客のIDセットを作成
-    const oldIds = new Set(
-      oldCustomers.map(customer => String(customer[idColumn] || '').trim())
-    )
+    console.log('比較に使用するキー列:', keyColumns)
+
+    // 既存顧客のキーセットを作成
+    const oldCustomerKeys = new Set<string>()
+    
+    oldCustomers.forEach(customer => {
+      const keyValue = this.generateCustomerKey(customer, keyColumns)
+      if (keyValue) {
+        oldCustomerKeys.add(keyValue)
+      }
+    })
+
+    console.log('既存顧客キー数:', oldCustomerKeys.size)
 
     // 新規顧客を抽出
     const newCustomerRows: DiffRow[] = []
     let rowIndex = 0
 
     newCustomers.forEach((customer) => {
-      const customerId = String(customer[idColumn] || '').trim()
+      const keyValue = this.generateCustomerKey(customer, keyColumns)
       
-      if (!oldIds.has(customerId) && customerId !== '') {
+      if (keyValue && !oldCustomerKeys.has(keyValue)) {
         newCustomerRows.push({
           rowIndex: rowIndex++,
           status: 'added' as const,
@@ -191,6 +201,8 @@ export class ClientSideCSVProcessor {
         })
       }
     })
+
+    console.log('新規顧客数:', newCustomerRows.length)
 
     // 全列名を取得
     const allColumns = Array.from(new Set([...oldHeaders, ...newHeaders]))
@@ -208,6 +220,57 @@ export class ClientSideCSVProcessor {
       file1Name: oldData.fileName,
       file2Name: newData.fileName
     }
+  }
+
+  /**
+   * 比較に使用するキー列を検出
+   */
+  private findComparisonKeys(oldHeaders: string[], newHeaders: string[]): string[] {
+    const commonHeaders = oldHeaders.filter(header => newHeaders.includes(header))
+    
+    // 優先順位: メールアドレス > 顧客名 > その他
+    const keyPriority = [
+      // メールアドレス関連
+      'メールアドレス', 'email', 'Email', 'EMAIL', 'mail', 'Mail',
+      // 顧客名関連  
+      '顧客名', '氏名', '名前', 'name', 'Name', 'NAME', 'customer_name', 'full_name',
+      // その他の識別子
+      '会社名', 'company', 'Company', 'COMPANY'
+    ]
+
+    const foundKeys: string[] = []
+    
+    for (const priority of keyPriority) {
+      const matchingHeader = commonHeaders.find(header => 
+        header.includes(priority) || priority.includes(header)
+      )
+      if (matchingHeader && !foundKeys.includes(matchingHeader)) {
+        foundKeys.push(matchingHeader)
+      }
+    }
+
+    // 優先キーが見つからない場合、共通列の最初の列を使用
+    if (foundKeys.length === 0 && commonHeaders.length > 0) {
+      foundKeys.push(commonHeaders[0])
+    }
+
+    return foundKeys
+  }
+
+  /**
+   * 顧客の一意キーを生成
+   */
+  private generateCustomerKey(customer: Record<string, string>, keyColumns: string[]): string | null {
+    const keyParts = keyColumns.map(column => {
+      const value = String(customer[column] || '').trim()
+      return value.toLowerCase() // 大文字小文字を無視
+    }).filter(part => part !== '')
+
+    if (keyParts.length === 0) {
+      return null
+    }
+
+    return keyParts.join('|') // 複数キーを結合
   }
 
   /**
