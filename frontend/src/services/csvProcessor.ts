@@ -34,22 +34,83 @@ export class ClientSideCSVProcessor {
    * CSVファイルの解析
    */
   private async parseCSVFile(file: File): Promise<Record<string, string>[]> {
+    // まずUTF-8で試行
+    try {
+      const utf8Result = await this.tryParseWithEncoding(file, 'UTF-8')
+      // 文字化けチェック：日本語文字が含まれているか
+      if (this.isValidJapaneseText(utf8Result)) {
+        return utf8Result
+      }
+    } catch (error) {
+      console.log('UTF-8での解析に失敗、他のエンコーディングを試行')
+    }
+
+    // Shift_JIS/CP932で試行（ファイルを手動で読み込み）
+    try {
+      const text = await this.readFileWithEncoding(file, 'shift_jis')
+      return new Promise((resolve, reject) => {
+        Papa.parse(text, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            resolve(results.data as Record<string, string>[])
+          },
+          error: (error) => {
+            reject(new Error(`CSV解析エラー: ${error.message}`))
+          }
+        })
+      })
+    } catch (error) {
+      console.warn('Shift_JISでの解析も失敗、UTF-8結果を使用')
+    }
+
+    // フォールバック：UTF-8で解析
+    return this.tryParseWithEncoding(file, 'UTF-8')
+  }
+
+  private async tryParseWithEncoding(file: File, encoding: string): Promise<Record<string, string>[]> {
     return new Promise((resolve, reject) => {
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        encoding: 'UTF-8',
+        encoding: encoding,
         complete: (results) => {
           if (results.errors.length > 0) {
-            console.warn('CSV解析警告:', results.errors)
+            console.warn(`${encoding}解析警告:`, results.errors)
           }
           resolve(results.data as Record<string, string>[])
         },
         error: (error) => {
-          reject(new Error(`CSV解析エラー: ${error.message}`))
+          reject(new Error(`${encoding}解析エラー: ${error.message}`))
         }
       })
     })
+  }
+
+  private async readFileWithEncoding(file: File, encoding: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        resolve(reader.result as string)
+      }
+      reader.onerror = () => reject(new Error('ファイル読み込みエラー'))
+      reader.readAsText(file, encoding)
+    })
+  }
+
+  private isValidJapaneseText(data: Record<string, string>[]): boolean {
+    if (data.length === 0) return true
+    
+    // 最初の数行をチェック
+    const sampleData = data.slice(0, 3)
+    const text = JSON.stringify(sampleData)
+    
+    // 文字化け文字をチェック（?、□、�などが多い場合は文字化け）
+    const corruptedChars = (text.match(/[?□�]/g) || []).length
+    const totalChars = text.length
+    
+    // 全体の5%以上が文字化け文字の場合は無効とみなす
+    return totalChars === 0 || (corruptedChars / totalChars) < 0.05
   }
 
   /**
