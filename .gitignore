@@ -6,7 +6,7 @@ backend_env/
 Scripts/
 
 # Build outputs
-frontend/dist/
+# frontend/dist/ - コメントアウト（手動デプロイのため）
 *.pyc
 __pycache__/
 .pytest_cache/
