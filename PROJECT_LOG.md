@@ -1,177 +1,226 @@
-# CSV比較アプリ - プロジェクト活動記録
+# 新規顧客抽出ツール - プロジェクト活動記録
 
 ## 📊 プロジェクト概要
-- **プロジェクト名**: CSV Diff Tool
-- **開発期間**: 2025年7月22日開始
-- **技術スタック**: React + Vite + TypeScript (Frontend) / FastAPI + Pandas (Backend)
-- **目的**: 2つのCSVファイルを比較し、差分を視覚化するWebアプリケーション
+- **プロジェクト名**: 新規顧客抽出ツール (CSV Diff Tool)
+- **GitHub リポジトリ**: https://github.com/katou-maker-main/CSV-comparison
+- **公開URL**: https://katou-maker-main.github.io/CSV-comparison/
+- **開発期間**: 2025年7月22日開始 → 2025年8月1日完成
+- **技術スタック**: React + Vite + TypeScript (完全クライアントサイド)
+- **目的**: 前回と今回のCSV/Excelファイルを比較し、新規顧客を抽出するWebアプリケーション
 
 ## ✅ 完了済みタスク
 
-### 1. フロントエンド開発 ✅
-- **React + Vite + TypeScript** セットアップ完了
-- **UI コンポーネント** 実装完了:
-  - `App.tsx` - メインアプリケーション
-  - `FileUpload.tsx` - ファイルアップロード機能（ドラッグ&ドロップ対応）
-  - `DiffViewer.tsx` - 差分表示テーブル（フィルター・ページネーション機能付き）
-- **デザインシステム** 実装完了:
-  - CSS カスタムプロパティによる色トークン管理
-  - 差分表示用カラーコード（緑=追加、赤=削除、黄=変更、白=未変更）
-  - レスポンシブデザイン対応
-- **API統合** 完了: Axiosベースのサービス層
+### 1. 技術スタック選定・アーキテクチャ決定 ✅
+- **重要な決定**: サーバーレス完全クライアントサイド処理に移行
+- **セキュリティ理由**: 個人情報を含むCSVファイルが外部サーバーに送信されないよう保証
+- **技術選択**: 
+  - フロントエンド: React + Vite + TypeScript
+  - CSV処理: PapaParse (JavaScript)
+  - Excel処理: SheetJS (XLSX)
+  - デプロイ: GitHub Pages (静的サイト)
 
-### 2. バックエンド開発 ✅
-- **FastAPI + Pandas** セットアップ完了
-- **CSV差分アルゴリズム** 実装完了 (`csv_diff.py`):
-  - 自動キー列検出機能
-  - 行レベル・セルレベルの変更検出
-  - データ正規化（空白文字処理、NULL値処理）
-  - ハッシュベース高速比較
-- **REST API** 実装完了:
-  - `POST /api/compare` - CSV比較エンドポイント
-  - エラーハンドリング・バリデーション
-  - CORS設定
+### 2. 文字エンコーディング対応 ✅
+- **問題**: 日本語CSVファイルの文字化け問題
+- **解決方法**: 複数エンコーディング自動検出システム実装
+  - 対応エンコーディング: UTF-8, Shift_JIS, EUC-JP, ISO-2022-JP
+  - バイナリレベルでの文字コード検出
+  - 日本語文字パターンマッチング
+  - 文字化け文字検出アルゴリズム
+- **実装場所**: `frontend/src/services/csvProcessor.ts:36-79`
 
-### 3. テスト実装 ✅
-- **バックエンドテスト**: pytest
-  - `test_csv_diff.py` - 差分アルゴリズムの単体テスト
-  - `test_main.py` - API エンドポイントテスト
-- **フロントエンドテスト**: Vitest + Testing Library
-  - `App.test.tsx` - メインコンポーネントテスト
-  - `api.test.ts` - API サービステスト
+### 3. ファイル処理機能 ✅
+- **CSV処理**: PapaParseベースの高度な解析機能
+- **Excel処理**: SheetJSによる.xlsx/.xls対応
+- **顧客比較ロジック**: 
+  - 自動キー列検出（メールアドレス > 顧客名 > 会社名）
+  - 複数キー組み合わせ対応
+  - 大文字小文字無視の比較
+- **実装場所**: `frontend/src/services/csvProcessor.ts`
 
-### 4. プロジェクト構成 ✅
-- **ディレクトリ構造** 整備完了
-- **設定ファイル** 作成完了: 
-  - `vite.config.ts`, `tsconfig.json`, `package.json`
-  - `requirements.txt`, `pytest.ini`
-- **ドキュメント** 作成完了: `README.md`
-- **配布パッケージ** 作成完了: `csv-diff-tool.zip`
+### 4. UI/UX実装 ✅
+- **ファイルアップロード**: ドラッグ&ドロップ対応
+- **差分表示**: 新規顧客のハイライト表示
+- **結果ダウンロード**: CSV形式での結果出力
+- **レスポンシブデザイン**: モバイル対応
+- **実装場所**: 
+  - `frontend/src/components/FileUpload.tsx`
+  - `frontend/src/components/DiffViewer.tsx`
 
-## 🚨 現在の課題・問題
+### 5. GitHub Pages デプロイ ✅
+- **デプロイ方法**: 手動デプロイ（GitHub Actions無効化）
+- **理由**: GitHub Actions設定エラー回避
+- **プロセス**: 
+  1. `npm run build` でビルド実行
+  2. `frontend/dist/*` を `docs/` にコピー
+  3. 相対パス修正（`/CSV-comparison/assets/` → `./assets/`）
+  4. Git commit & push
 
-### 1. Python環境の問題 🔥 **最優先**
-- **問題**: `python`コマンドが認識されない
-- **症状**: `ERR_CONNECTION_REFUSED` でローカルホストにアクセスできない
-- **原因**: Python未インストールまたはPATH設定問題
-- **対処方法**:
-  1. Python 3.8+ のインストール確認
-  2. 環境変数PATH設定確認
-  3. Windows の場合は `py` ランチャーの使用検討
+### 6. プロジェクト管理ファイル ✅
+- **CLAUDE.md**: Claude Code用開発設定・ベストプラクティス
+- **PROJECT_LOG.md**: 本活動記録ファイル
+- **README.md**: ユーザー向けドキュメント
 
-### 2. 依存関係の問題
-- **バックエンド**: `pip install -r requirements.txt` 未実行
-- **フロントエンド**: `npm install` 未実行（Node.js環境確認必要）
+## 🎯 重要な技術的決定事項
 
-## 🎯 次回セッション時の優先タスク
+### セキュリティ設計
+- **データプライバシー**: 全処理をブラウザ内で完結
+- **ネットワーク通信**: 一切のサーバー送信なし
+- **ファイル処理**: ローカルFileAPI使用のみ
 
-### 即座に実行すべき項目（優先度：高）
+### 文字エンコーディング戦略
+```typescript
+// 複数エンコーディング対応の実装パターン
+const encodings = ['UTF-8', 'Shift_JIS', 'EUC-JP', 'ISO-2022-JP']
+// バイナリレベル文字コード検出
+// 日本語文字パターン: /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/
+// 文字化け検出: /[?□�\uFFFD]/g
+```
 
-1. **Python環境確認・セットアップ**
+### 顧客比較アルゴリズム
+```typescript
+// キー列検出の優先順位
+const keyPriority = [
+  'メールアドレス', 'email', 'Email', 'EMAIL',
+  '顧客名', '氏名', '名前', 'name', 'Name', 
+  '会社名', 'company', 'Company'
+]
+```
+
+## 🚨 解決済み問題・トラブル記録
+
+### 1. 文字化け問題 ✅ 解決済み
+- **症状**: 日本語CSVファイルで文字化け発生
+- **原因**: エンコーディング不一致（Shift_JIS vs UTF-8）
+- **解決**: 複数エンコーディング自動検出システム実装
+
+### 2. GitHub Actions デプロイエラー ✅ 解決済み
+- **症状**: "Missing environment" エラーでデプロイ失敗
+- **原因**: GitHub Actions設定問題
+- **解決**: GitHub Actionsを無効化し手動デプロイに切り替え
+
+### 3. GitHub Pages パスエラー ✅ 解決済み
+- **症状**: 公開サイトでCSS/JSファイルが404エラー
+- **原因**: 絶対パス（`/CSV-comparison/assets/`）使用
+- **解決**: 相対パス（`./assets/`）に修正
+
+### 4. サーバー依存からの脱却 ✅ 解決済み
+- **旧構成**: FastAPI + Python バックエンド
+- **問題**: サーバー運用・CORS・セキュリティ懸念
+- **解決**: 完全クライアントサイド処理に移行
+
+## 📋 次回起動時の作業手順
+
+### 即座に確認すべき項目
+1. **現在の公開状況確認**
    ```bash
-   # 以下コマンドで確認
-   python --version  # または py --version
-   pip --version
+   # ブラウザで確認
+   https://katou-maker-main.github.io/CSV-comparison/
    ```
 
-2. **依存関係インストール**
+2. **開発環境確認**
    ```bash
-   # バックエンド
-   cd backend
-   pip install -r requirements.txt
-   
-   # フロントエンド  
    cd frontend
-   npm install
+   npm install  # 依存関係確認
+   npm run dev  # 開発サーバー起動
    ```
 
-3. **サーバー起動テスト**
+3. **最新ビルド＆デプロイ手順**
    ```bash
-   # バックエンド起動
-   cd backend
-   python main.py  # または py main.py
-   
-   # 別ターミナルでフロントエンド起動
    cd frontend
-   npm run dev
+   npm run build
+   cp -r dist/* ../docs/
+   # docs/index.html のパスを相対パスに修正
+   git add .
+   git commit -m "最新版デプロイ"
+   git push origin main
    ```
 
-### 確認すべき項目（優先度：中）
+### 機能追加・修正時の手順
+1. `frontend/src/` で開発
+2. `npm run build` でビルド
+3. `docs/` フォルダに手動コピー
+4. パス修正（必要に応じて）
+5. Git commit & push
 
-4. **ポート使用状況確認**
-   - ポート8000（バックエンド）が使用可能か
-   - ポート3000（フロントエンド）が使用可能か
+## 🔧 開発環境・依存関係
 
-5. **ファイアウォール設定確認**
-   - ローカルホスト接続がブロックされていないか
+### フロントエンド (frontend/)
+```json
+{
+  "dependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "papaparse": "^5.4.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.3",
+    "vite": "^4.4.5",
+    "typescript": "^5.0.2"
+  }
+}
+```
 
-## 📋 トラブルシューティングガイド
+### 開発コマンド
+```bash
+npm run dev      # 開発サーバー起動
+npm run build    # 本番ビルド
+npm run preview  # ビルド結果プレビュー
+```
 
-### Python関連エラー
-- **`Python was not found`**: Python未インストール → Python公式サイトからダウンロード
-- **`pip is not recognized`**: pip未インストール → `python -m ensurepip --upgrade`
-- **ImportError**: 依存関係未インストール → `pip install -r requirements.txt`
-
-### Node.js関連エラー  
-- **`npm not found`**: Node.js未インストール → Node.js公式サイトからダウンロード
-- **依存関係エラー**: `npm install` 実行
-
-### ネットワーク関連エラー
-- **ERR_CONNECTION_REFUSED**: サーバー未起動 → バックエンド起動確認
-- **CORS エラー**: プロキシ設定確認 → vite.config.tsのproxy設定
-
-## 🔧 開発環境要件
-
-### 必須ソフトウェア
-- **Python 3.8+** （pandas、FastAPI対応）
-- **Node.js 18+** （React、Vite対応）
-- **npm または yarn** （パッケージ管理）
-
-### 推奨IDE設定
-- **VSCode** + Python拡張機能 + TypeScript拡張機能
-- **ESLint** + **Prettier** （コード品質管理）
-
-## 📁 ファイル構造マップ
+## 📁 重要ファイル構造
 
 ```
 CAV vs CSV/
-├── frontend/
+├── frontend/                    # メイン開発フォルダ
 │   ├── src/
-│   │   ├── components/     # React コンポーネント
-│   │   ├── services/       # API クライアント
-│   │   ├── styles/         # CSS・デザイントークン
-│   │   ├── types/          # TypeScript 型定義
-│   │   └── tests/          # フロントエンドテスト
-│   ├── package.json        # npm依存関係
-│   ├── vite.config.ts      # Viteビルド設定
-│   └── vitest.config.ts    # テスト設定
-├── backend/
-│   ├── main.py            # FastAPI メインアプリ
-│   ├── csv_diff.py        # CSV比較ロジック
-│   ├── requirements.txt   # Python依存関係
-│   ├── pytest.ini         # テスト設定
-│   └── tests/             # バックエンドテスト
-├── README.md              # プロジェクト説明書
-├── PROJECT_LOG.md         # 本ファイル
-└── csv-diff-tool.zip      # 配布用アーカイブ
+│   │   ├── components/
+│   │   │   ├── FileUpload.tsx   # ファイルアップロード UI
+│   │   │   └── DiffViewer.tsx   # 差分表示 UI
+│   │   ├── services/
+│   │   │   └── csvProcessor.ts  # 🔥 メインロジック
+│   │   ├── types/
+│   │   │   └── index.ts         # TypeScript型定義
+│   │   └── App.tsx              # メインアプリ
+│   ├── dist/                    # ビルド出力
+│   └── package.json
+├── docs/                        # 🔥 GitHub Pages デプロイ用
+│   ├── assets/
+│   └── index.html               # 相対パス要確認
+├── backend/                     # 🚫 現在未使用（過去の遺産）
+├── CLAUDE.md                    # 🔥 Claude Code 設定
+├── PROJECT_LOG.md               # 🔥 本ファイル
+└── README.md
 ```
 
-## 🎯 将来の拡張予定
+## 🎯 将来の改善・拡張案
 
-### 機能追加候補
-- **エクスポート機能**: 差分結果をCSV/Excel形式で出力
-- **差分ハイライト**: セル単位での詳細な変更表示
-- **大容量ファイル対応**: ストリーミング処理・チャンク分割
-- **履歴管理**: 比較結果の保存・管理機能
-- **API認証**: セキュリティ強化
+### 優先度：高
+- **大容量ファイル対応**: Web Workers使用による非同期処理
+- **エクスポート機能強化**: Excel形式出力対応
+- **UI改善**: プログレスバー、エラー表示の向上
 
-### パフォーマンス改善
-- **メモリ最適化**: 大容量CSV処理の効率化
-- **UI最適化**: 仮想スクロール・遅延読み込み
-- **キャッシュ機能**: 比較結果のブラウザキャッシュ
+### 優先度：中
+- **差分詳細表示**: セルレベルでの変更内容表示
+- **設定保存**: ローカルストレージ活用
+- **テーマ機能**: ダーク/ライトモード切り替え
+
+### 優先度：低
+- **多言語対応**: 英語版UI作成
+- **PWA化**: オフライン対応
+- **統計機能**: 差分データの統計表示
+
+## 🔒 セキュリティ・プライバシー保証
+
+- ✅ **完全クライアントサイド処理**: データはブラウザ外に送信されない
+- ✅ **静的サイトホスティング**: サーバー側データ処理なし
+- ✅ **HTTPS通信**: GitHub Pages標準対応
+- ✅ **ログ記録なし**: アクセス・ファイル内容の記録なし
 
 ---
 
-**最終更新**: 2025年7月22日  
-**次回確認事項**: Python環境セットアップ状況  
-**緊急度**: 🔥 高（アプリ起動不可のため）
+**最終更新**: 2025年8月1日  
+**プロジェクト状態**: ✅ 完成・本番運用中  
+**次回確認事項**: 公開サイトの動作確認・ユーザーフィードバック収集  
+
+**🎉 プロジェクト完了**: 個人情報保護に配慮した安全な新規顧客抽出ツールとして完成
